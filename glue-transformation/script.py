@@ -1,10 +1,12 @@
+
 import sys
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
 from pyspark.sql.functions import (
-    col, count, row_number, to_date, when, regexp_replace
+    col, count, row_number, to_date, when, regexp_replace, concat_ws, lit, lower, abs
+
 )
 from pyspark.sql.window import Window
 
@@ -58,47 +60,28 @@ df = df.join(parent_canonical, df["owning entity retailer number"] == col("oern"
 # Step 6: Add Is_Negative_Sale flag
 df = df.withColumn("Is_Negative_Sale", when(col("net ticket sales amount") < 0, 1).otherwise(0))
 
-# Step 7: Add region column based on 'retailer location county'
-region_expr = when(col("retailer location county").isin(
-    'armstrong','briscoe','carson','castro','childress','collingsworth','dallam','deaf smith','donley','gray','hall','hansford','hartley','hemphill','hutchinson','lipscomb','moore','ochiltree','oldham','parmer','potter','randall','roberts','sherman','swisher','wheeler'
-), "Panhandle").when(col("retailer location county").isin(
-    'collin','dallas','denton','ellis','erath','hood','hunt','johnson','kaufman','navarro','palo pinto','parker','rockwall','somervell','tarrant','wise',
-    'archer','baylor','clay','cottle','foard','hardeman','jack','montague','wichita','wilbarger','young',
-    'cooke','fannin','grayson'
-), "North Texas").when(col("retailer location county").isin(
-    'bowie','cass','delta','franklin','hopkins','lamar','morris','red river','titus',
-    'anderson','camp','cherokee','gregg','harrison','henderson','marion','panola','rains','rusk','smith','upshur','van zandt','wood',
-    'angelina','houston','jasper','nacogdoches','newton','polk','sabine','san augustine','san jacinto','shelby','trinity','tyler',
-    'hardin','jefferson','orange'
-), "East Texas").when(col("retailer location county").isin(
-    'austin','brazoria','chambers','colorado','fort bend','galveston','harris','liberty','matagorda','montgomery','walker','waller','wharton'
-), "Upper Gulf Coast").when(col("retailer location county").isin(
-    'atascosa','bandera','bexar','comal','frio','gillespie','guadalupe','karnes','kendall','kerr','medina','wilson',
-    'calhoun','dewitt','goliad','gonzales','jackson','lavaca','victoria',
-    'aransas','bee','brooks','duval','jim wells','kenedy','kleberg','live oak','mcmullen','nueces','refugio','san patricio',
-    'cameron','hidalgo','willacy',
-    'jim hogg','starr','webb','zapata',
-    'dimmit','edwards','kinney','la salle','maverick','real','uvalde','val verde','zavala'
-), "South Texas").when(col("retailer location county").isin(
-    'coke','concho','crockett','irion','kimble','mason','mcculloch','menard','reagan','schleicher','sterling','sutton','tom green',
-    'andrews','borden','crane','dawson','ector','gaines','glasscock','howard','loving','martin','midland','pecos','reeves','terrell','upton','ward','winkler',
-    'brewster','culberson','el paso','hudspeth','jeff davis','presidio',
-    'bailey','cochran','crosby','dickens','floyd','garza','hale','hockley','king','lamb','lubbock','lynn','motley','terry','yoakum',
-    'brown','callahan','coleman','comanche','eastland','fisher','haskell','jones','kent','knox','mitchell','nolan','runnels','scurry','shackelford','stephens','stonewall','taylor','throckmorton'
-), "West Texas").when(col("retailer location county").isin(
-    'brazos','burleson','grimes','leon','madison','robertson','washington',
-    'bastrop','blanco','burnet','caldwell','fayette','hays','lee','llano','travis','williamson',
-    'bell','coryell','hamilton','lampasas','milam','mills','san saba',
-    'bosque','falls','freestone','hill','limestone','mclennan'
-), "Central Texas").otherwise("Unknown")
-df = df.withColumn("region", region_expr)
+
+
+
+# Step 7: Derived columns - number of tickets sold and returned
+df = df.withColumn(
+    "number_of_ticket_returned",
+    when(col("ticket price") > 0, abs(col("ticket returns amount")) / col("ticket price")).otherwise(0)
+).withColumn(
+    "number_of_ticket_sold",
+    when(col("ticket price") > 0, col("net ticket sales amount") / col("ticket price")).otherwise(0)
+)
+
+df = df.withColumn("ticket_returns_amount_positive", abs(col("ticket returns amount")))
+
+df = df.withColumn("promotional_tickets_amount_positive", abs(col("promotional tickets amount")))
+
 
 # Step 8: Drop unwanted columns (exact matches)
 columns_to_drop = [
     "retailer location address 2",
     "retailer location zip code +4",
     "calendar month",
-    "fiscal month name and number",
     "calendar year",
     "calendar month name and number",
     "retailer number and location name",
@@ -107,23 +90,11 @@ columns_to_drop = [
 ]
 df = df.drop(*columns_to_drop)
 
-# Step 9: Derived columns - number of tickets sold and returned
-df = df.withColumn(
-    "number_of_ticket_returned",
-    when(col("ticket price") > 0, col("ticket returns amount") / col("ticket price")).otherwise(0)
-).withColumn(
-    "number_of_ticket_sold",
-    when(col("ticket price") > 0, col("net ticket sales amount") / col("ticket price")).otherwise(0)
-)
 
-# Step 10: Reorder columns - preserve original order + derived fields
-preserved_columns = [c for c in df.columns if c not in ["Is_Negative_Sale", "region", "number_of_ticket_returned", "number_of_ticket_sold"]]
-final_columns = preserved_columns + ["Is_Negative_Sale", "region", "number_of_ticket_returned", "number_of_ticket_sold"]
-df = df.select(final_columns)
 
-# Step 11: Write to S3
+# Step 9: Write to S3
 output_path = "s3://final-transformedbucket/masterdata2/"
 df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
 
-# Step 12: Commit job
+# Step 10: Commit job
 job.commit()
