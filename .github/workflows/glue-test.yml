@@ -1,27 +1,143 @@
-name: Upload Glue Script to S3
+name: Texas Lottery Glue CI/CD
 
 on:
   push:
     branches:
       - main
     paths:
-      - gluecodefinal.py
+      - 'Scripts/**'
 
 jobs:
-  upload-to-s3:
+  glue_pipeline:
     runs-on: ubuntu-latest
 
+    env:
+      SCRIPT_PATH: Scripts/transform.py
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Upload to S3
-      run: |
-        aws s3 cp gluecodefinal.py s3://my-glue-scripts-bucket/scripts/gluecodefinal(1).py
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install boto3 pylint
+
+      - name: Lint/Test Glue Script
+        run: |
+          pylint $SCRIPT_PATH || echo "Lint warnings (non-blocking)"
+
+      - name: Upload Script to S3
+        run: |
+          aws s3 cp "$SCRIPT_PATH" "s3://jay-patil-script-bucket/Glue_script/transformation_script/transform(1).py"
+
+
+      - name: Set Up Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        working-directory: terraform/
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: terraform/
+        run: terraform validate
+
+      - name: Terraform Apply with Variables
+        working-directory: terraform/
+        run: |
+          terraform apply -auto-approve \
+            -var="aws_region=${{ secrets.AWS_REGION }}" \
+            -var="iam_role=${{ secrets.IAM_ROLE }}" \
+            -var="raw_data_s3_path=${{ secrets.RAW_DATA_S3_PATH }}" \
+            -var="transformed_data_s3_path=${{ secrets.TRANSFORMED_DATA_S3_PATH }}" \
+            -var="glue_script_s3_path=${{ secrets.GLUE_SCRIPT_S3_PATH }}" \
+            -var="raw_glue_database=${{ secrets.RAW_GLUE_DATABASE }}" \
+            -var="transformed_glue_database=${{ secrets.TRANSFORMED_GLUE_DATABASE }}"
+
+      - name: Run Glue Job and Crawler
+        run: |
+          echo "Starting Glue Job..."
+          JOB_RUN_ID=$(aws glue start-job-run \
+            --region "us-east-1" \
+            --job-name "${{ secrets.GLUE_JOB_NAME }}" \
+            --query 'JobRunId' \
+            --output text)
+
+          echo "Started job with ID: $JOB_RUN_ID"
+          echo "Polling until job completes..."
+
+          while true; do
+            STATUS=$(aws glue get-job-run \
+              --region "us-east-1" \
+              --job-name "${{ secrets.GLUE_JOB_NAME }}" \
+              --run-id "$JOB_RUN_ID" \
+              --query 'JobRun.JobRunState' \
+              --output text)
+
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Job completed successfully."
+              break
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "STOPPED" ]; then
+              echo "Job failed or was stopped."
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+          echo "Waiting 2 minutes for data to flush to S3..."
+          sleep 120
+
+          echo "Starting transformed data crawler..."
+          aws glue start-crawler --region "us-east-1" --name "${{ secrets.CRAWLER_NAME }}"
+      
+      - name: Wait for Crawler to Finish Before Destroy
+        run: |
+          echo "Waiting for crawler to finish..."
+          while true; do
+            STATUS=$(aws glue get-crawler --name "${{ secrets.CRAWLER_NAME }}" --query 'Crawler.State' --output text || echo "NOT_FOUND")
+            echo "Crawler status: $STATUS"
+
+            if [ "$STATUS" = "READY" ]; then
+              echo "Crawler is idle, safe to destroy."
+              break
+            elif [ "$STATUS" = "NOT_FOUND" ]; then
+              echo "Crawler not found, maybe already deleted."
+              break
+            else
+              echo "Crawler still running. Sleeping 30 seconds..."
+              sleep 30
+            fi
+          done
+
+
+      - name: Terraform Destroy (Cleanup)
+        if: always()
+        working-directory: terraform/
+        run: |
+          echo "Destroying all Terraform-managed resources..."
+          terraform destroy -auto-approve \
+            -var="aws_region=${{ secrets.AWS_REGION }}" \
+            -var="iam_role=${{ secrets.IAM_ROLE }}" \
+            -var="raw_data_s3_path=${{ secrets.RAW_DATA_S3_PATH }}" \
+            -var="transformed_data_s3_path=${{ secrets.TRANSFORMED_DATA_S3_PATH }}" \
+            -var="glue_script_s3_path=${{ secrets.GLUE_SCRIPT_S3_PATH }}" \
+            -var="raw_glue_database=${{ secrets.RAW_GLUE_DATABASE }}" \
+            -var="transformed_glue_database=${{ secrets.TRANSFORMED_GLUE_DATABASE }}"
+
