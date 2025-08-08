@@ -23,7 +23,7 @@ job.init(args['JOB_NAME'], args)
 df = glueContext.create_dynamic_frame.from_catalog(
     database="test_db",
     table_name="lottery_sales",
-    transformation_ctx="datasource"
+    transformation_ctx="Terraform_ETL_Using_Glue"
 ).toDF()
 
 # Step : Drop duplicates
@@ -142,7 +142,7 @@ columns_to_drop = [
 ]
 df = df.drop(*columns_to_drop)
 
-# Step : Write to S3
+# Step 11: Write to S3
 output_path = "s3://jay-patil-transformed-bucket/transformed_data/"
 df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
 
