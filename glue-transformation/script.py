@@ -33,7 +33,6 @@ df = df.dropDuplicates()
 df = df.withColumn("gross ticket sales amount", col("gross ticket sales amount").cast("decimal(20,2)")) \
        .withColumn("net ticket sales amount", col("net ticket sales amount").cast("decimal(20,2)")) \
        .withColumn("ticket price", col("ticket price").cast("decimal(10,2)")) \
-       .withColumn("population", regexp_replace(col("population"), ",", "").cast("long")) \
        .withColumn("month ending date", to_date(col("month ending date"), "MM/dd/yyyy"))
 
 # Step : Canonical Retailer Location Name
