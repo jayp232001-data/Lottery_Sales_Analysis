@@ -17,6 +17,13 @@ resource "aws_glue_job" "transform_job" {
     python_version  = "3"                              # Use Python 3
   }
 
+  default_arguments = {
+    "--TempDir"               = "s3://my-temp-bucket/glue-temp/"
+    "--job-bookmark-option"   = "job-bookmark-disable"
+    "--enable-metrics"        = "true"
+    "--enable-continuous-cloudwatch-log" = "true"
+  }
+
   # Retry and timeout configurations
   max_retries = 0                                     # Retry once if the job fails
   timeout     = 60                                     # Timeout in minutes
