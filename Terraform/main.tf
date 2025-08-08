@@ -26,7 +26,7 @@ resource "aws_glue_job" "transform_job" {
 
   # Retry and timeout configurations
   max_retries = 0                                     # Retry once if the job fails
-  timeout     = 60                                     # Timeout in minutes
+  timeout     = 120                                     # Timeout in minutes
   glue_version = "5.0"                                 # Glue runtime version
 
   # Optional: Specify number of workers and type

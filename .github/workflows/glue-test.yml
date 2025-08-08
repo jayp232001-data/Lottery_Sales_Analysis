@@ -5,14 +5,14 @@ on:
     branches:
       - main
     paths:
-      - 'Scripts/**'
+      - 'glue-transformation/**'
 
 jobs:
   glue_pipeline:
     runs-on: ubuntu-latest
 
     env:
-      SCRIPT_PATH: Scripts/transform.py
+      SCRIPT_PATH: glue-transformation/script.py
 
     steps:
 
@@ -42,7 +42,7 @@ jobs:
 
       - name: Upload Script to S3
         run: |
-          aws s3 cp "$SCRIPT_PATH" "s3://jay-patil-script-bucket/Glue_script/transformation_script/transform(1).py"
+          aws s3 cp "$SCRIPT_PATH" "s3://jay-patil-script-bucket/Glue_script/transformation_script/final_script.py"
 
 
       - name: Set Up Terraform
