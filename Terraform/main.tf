@@ -18,11 +18,11 @@ resource "aws_glue_job" "transform_job" {
   }
 
   default_arguments = {
-    "--TempDir"               = "s3://my-temp-bucket/glue-temp/"
-    "--job-bookmark-option"   = "job-bookmark-disable"
-    "--enable-metrics"        = "true"
-    "--enable-continuous-cloudwatch-log" = "true"
-  }
+    "--job-bookmark-option"                   = "job-bookmark-disable"
+    "--enable-metrics"                        = "true"
+    "--enable-continuous-cloudwatch-log"      = "true"
+    "--enable-spark-ui"                       = "true"
+      }
 
   # Retry and timeout configurations
   max_retries = 0                                     # Retry once if the job fails
