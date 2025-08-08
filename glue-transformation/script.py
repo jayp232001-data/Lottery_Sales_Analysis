@@ -4,6 +4,7 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
+from pyspark.sql.types import StringType
 from pyspark.sql.functions import (
     col, count, row_number, to_date, when, regexp_replace, concat_ws, lit, lower, abs
 
@@ -20,9 +21,9 @@ job.init(args['JOB_NAME'], args)
 
 # Step 1: Read from AWS Glue Data Catalog
 df = glueContext.create_dynamic_frame.from_catalog(
-    database="lotteryfinal",
-    table_name="part_00000_f4ecfb09_7078_46bc_a277_c37f5e02741e_c000_csv",
-    transformation_ctx="datasource"
+    database="test_db",
+    table_name="lottery_sales",
+    transformation_ctx="Terraform_ETL_Using_Glue"
 ).toDF()
 
 # Step 2: Drop duplicates
@@ -90,7 +91,7 @@ columns_to_drop = [
 df = df.drop(*columns_to_drop)
 
 # Step 11: Write to S3
-output_path = "s3://final-transformedbucket/masterdata2/"
+output_path = "s3://jay-patil-transformed-bucket/transformed_data/"
 df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
 
 # Step 12: Commit job
