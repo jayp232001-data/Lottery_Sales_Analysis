@@ -26,52 +26,58 @@ df = glueContext.create_dynamic_frame.from_catalog(
     transformation_ctx="Terraform_ETL_Using_Glue"
 ).toDF()
 
+# Step : Standardize column names (replace spaces with underscores and lowercase)
+df = df.toDF(*[c.strip().lower().replace(" ", "_") for c in df.columns])
+
 # Step : Drop duplicates
 df = df.dropDuplicates()
 
 # Step : Cast numeric and date columns
-df = df.withColumn("gross ticket sales amount", col("gross ticket sales amount").cast("decimal(20,2)")) \
-       .withColumn("net ticket sales amount", col("net ticket sales amount").cast("decimal(20,2)")) \
-       .withColumn("ticket price", col("ticket price").cast("decimal(10,2)")) \
-       .withColumn("month ending date", to_date(col("month ending date"), "MM/dd/yyyy"))
+df = df.withColumn("gross_ticket_sales_amount", col("gross_ticket_sales_amount").cast("decimal(20,2)")) \
+       .withColumn("net_ticket_sales_amount", col("net_ticket_sales_amount").cast("decimal(20,2)")) \
+       .withColumn("ticket_price", col("ticket_price").cast("decimal(10,2)")) \
+       .withColumn("month_ending_date", to_date(col("month_ending_date"), "MM/dd/yyyy"))
+
 
 # Step : Canonical Retailer Location Name
-retailer_name_freq = df.groupBy("retailer license number", "retailer location name") \
+retailer_name_freq = df.groupBy("retailer_license_number", "retailer_location_name") \
     .agg(count("*").alias("name_count"))
-retailer_window = Window.partitionBy("retailer license number").orderBy(col("name_count").desc())
+retailer_window = Window.partitionBy("retailer_license_number").orderBy(col("name_count").desc())
 retailer_ranked = retailer_name_freq.withColumn("rank", row_number().over(retailer_window))
 retailer_canonical = retailer_ranked.filter(col("rank") == 1) \
-    .selectExpr("`retailer license number` as rl_num", "`retailer location name` as canonical_name")
-df = df.join(retailer_canonical, df["retailer license number"] == col("rl_num"), "left") \
-       .drop("retailer location name", "rl_num") \
-       .withColumnRenamed("canonical_name", "retailer location name")
+    .selectExpr("retailer_license_number as rl_num", "retailer_location_name as canonical_name")
+df = df.join(retailer_canonical, df["retailer_license_number"] == col("rl_num"), "left") \
+       .drop("retailer_location_name", "rl_num") \
+       .withColumnRenamed("canonical_name", "retailer_location_name")
 
 # Step : Canonical Owning Entity Retailer Name
-parent_name_freq = df.groupBy("owning entity retailer number", "owning entity retailer name") \
+
+parent_name_freq = df.groupBy("owning_entity_retailer_number", "owning_entity_retailer_name") \
     .agg(count("*").alias("name_count"))
-parent_window = Window.partitionBy("owning entity retailer number").orderBy(col("name_count").desc())
+parent_window = Window.partitionBy("owning_entity_retailer_number").orderBy(col("name_count").desc())
 parent_ranked = parent_name_freq.withColumn("rank", row_number().over(parent_window))
 parent_canonical = parent_ranked.filter(col("rank") == 1) \
-    .selectExpr("`owning entity retailer number` as oern", "`owning entity retailer name` as canonical_parent")
-df = df.join(parent_canonical, df["owning entity retailer number"] == col("oern"), "left") \
-       .drop("owning entity retailer name", "oern") \
-       .withColumnRenamed("canonical_parent", "owning entity retailer name")
+    .selectExpr("owning_entity_retailer_number as oern", "owning_entity_retailer_name as canonical_parent")
+df = df.join(parent_canonical, df["owning_entity_retailer_number"] == col("oern"), "left") \
+       .drop("owning_entity_retailer_name", "oern") \
+       .withColumnRenamed("canonical_parent", "owning_entity_retailer_name")
 
 # Step : Add Is_Negative_Sale flag
-df = df.withColumn("Is_Negative_Sale", when(col("net ticket sales amount") < 0, 1).otherwise(0))
+df = df.withColumn("is_negative_sale", when(col("net_ticket_sales_amount") < 0, 1).otherwise(0))
 
-df = df.withColumn("cancelled_tickets_amount_positive", abs(col("cancelled tickets amount")))
+df = df.withColumn("cancelled_tickets_amount_positive", abs(col("cancelled_tickets_amount")))
 
-# Add a new column with ticket_price as string
-df = df.withColumn("ticket_price_str", col("ticket price").cast(StringType()))
+# Step : Add ticket_price_str
+df = df.withColumn("ticket_price_str", col("ticket_price").cast(StringType()))
 
+# Step : Add retailer_group
 df = df.withColumn(
     "retailer_group",
     when(
-        col("retailer license number") == col("owning entity retailer number"),
+        col("retailer_license_number") == col("owning_entity_retailer_number"),
         "Self-Owned Retailer"
     ).otherwise(
-        col("owning entity retailer name")
+        col("owning_entity_retailer_name")
     )
 )
 
@@ -108,42 +114,40 @@ central_texas = ['brazos','burleson','grimes','leon','madison','robertson','wash
                  'bell','coryell','hamilton','lampasas','milam','mills','san saba',
                  'bosque','falls','freestone','hill','limestone','mclennan']
 
-# Create region column using when().otherwise() chain
 df = df.withColumn(
     "region",
-    when(lower(col("retailer location county")).isin(panhandle), "Panhandle")
-    .when(lower(col("retailer location county")).isin(north_texas), "North Texas")
-    .when(lower(col("retailer location county")).isin(east_texas), "East Texas")
-    .when(lower(col("retailer location county")).isin(upper_gulf), "Upper Gulf Coast")
-    .when(lower(col("retailer location county")).isin(south_texas), "South Texas")
-    .when(lower(col("retailer location county")).isin(west_texas), "West Texas")
-    .when(lower(col("retailer location county")).isin(central_texas), "Central Texas")
+    when(lower(col("retailer_location_county")).isin(panhandle), "Panhandle")
+    .when(lower(col("retailer_location_county")).isin(north_texas), "North Texas")
+    .when(lower(col("retailer_location_county")).isin(east_texas), "East Texas")
+    .when(lower(col("retailer_location_county")).isin(upper_gulf), "Upper Gulf Coast")
+    .when(lower(col("retailer_location_county")).isin(south_texas), "South Texas")
+    .when(lower(col("retailer_location_county")).isin(west_texas), "West Texas")
+    .when(lower(col("retailer_location_county")).isin(central_texas), "Central Texas")
     .otherwise("Unknown")
 )
 
-
+# Step 11: Full location string
 df = df.withColumn(
     "location_full",
-    concat_ws(", ", col("retailer location county"), col("retailer location city"), lit("Texas"), lit("USA"))
+    concat_ws(", ", col("retailer_location_county"), col("retailer_location_city"), lit("Texas"), lit("USA"))
 )
 
-
-# Step : Drop unwanted columns (exact matches)
+# Step 12: Drop unwanted columns
 columns_to_drop = [
-    "retailer location address 2",
-    "retailer location zip code +4",
-    "calendar month",
-    "calendar year",
-    "calendar month name and number",
-    "retailer number and location name",
-    "retailer location state",
-    "owning entity/chain head number and name"
+    "retailer_location_address_2",
+    "retailer_location_zip_code_+4",
+    "calendar_month",
+    "calendar_year",
+    "calendar_month_name_and_number",
+    "retailer_number_and_location_name",
+    "retailer_location_state",
+    "owning_entity/chain_head_number_and_name"
 ]
 df = df.drop(*columns_to_drop)
 
-# Step 11: Write to S3
+# Step 13: Write partitioned by fiscal_year
 output_path = "s3://jay-patil-transformed-bucket/transformed_data/"
-df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
+df.write.mode("overwrite").option("header", "true").partitionBy("fiscal_year").csv(output_path)
 
-# Step : Commit job
+# Step 14: Commit job
 job.commit()
