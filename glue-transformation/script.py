@@ -11,7 +11,7 @@ from pyspark.sql.functions import (
 )
 from pyspark.sql.window import Window
 
-# Initialize Glue job (test)
+# Initialize Glue job 
 args = getResolvedOptions(sys.argv, ['JOB_NAME'])
 sc = SparkContext()
 glueContext = GlueContext(sc)
@@ -147,7 +147,7 @@ df = df.drop(*columns_to_drop)
 
 # Step 13: Write partitioned by fiscal_year
 output_path = "s3://jay-patil-transformed-bucket/transformed_data/"
-df.write.mode("overwrite").option("header", "true").partitionBy("fiscal_year").csv(output_path)
+df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
 
 # Step 14: Commit job
 job.commit()
