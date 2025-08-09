@@ -65,10 +65,24 @@ df = df.join(parent_canonical, df["owning_entity_retailer_number"] == col("oern"
 # Step : Add Is_Negative_Sale flag
 df = df.withColumn("is_negative_sale", when(col("net_ticket_sales_amount") < 0, 1).otherwise(0))
 
-df = df.withColumn("cancelled_tickets_amount_positive", abs(col("cancelled_tickets_amount")))
-
 # Step : Add ticket_price_str
 df = df.withColumn("ticket_price_str", col("ticket_price").cast(StringType()))
+
+df = df.withColumn("cancelled_tickets_amount_positive", abs(col("cancelled_tickets_amount")))
+
+df = df.withColumn("promotional_tickets_amount_positive", abs(col("promotional_tickets_amount")))
+
+df = df.withColumn("ticket_returns_amount_positive", abs(col("ticket_returns_amount")))
+
+# Step : Derived columns - number of tickets sold and returned
+df = df.withColumn(
+    "number_of_ticket_returned",
+    when(col("ticket_price") > 0, abs(col("ticket_returns_amount")) / col("ticket_price")).otherwise(0)
+).withColumn(
+    "number_of_ticket_sold",
+    when(col("ticket_price") > 0, col("net_ticket_sales_amount") / col("ticket_price")).otherwise(0)
+)
+
 
 # Step : Add retailer_group
 df = df.withColumn(
@@ -132,6 +146,7 @@ df = df.withColumn(
     concat_ws(", ", col("retailer_location_county"), col("retailer_location_city"), lit("Texas"), lit("USA"))
 )
 
+
 # Step 12: Drop unwanted columns
 columns_to_drop = [
     "retailer_location_address_2",
@@ -151,3 +166,5 @@ df.coalesce(1).write.mode("overwrite").option("header", "true").csv(output_path)
 
 # Step 14: Commit job
 job.commit()
+
+
