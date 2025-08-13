@@ -56,15 +56,6 @@ Methodology:
 
 ○	Identify and rank top parent retailers with consistently high sales.
 
-○	Conduct market basket analysis to see co-purchase trends (e.g. scratch-off + Powerball).
-
-5.	Modeling:
-○	Forecasting Modeling:
-■	Event based modelling and revenue planning.
-
-○	Predictive Modeling:
-■	Predict high-sales days based on historical data.
-■	Classification for predicting popular game types at a retailer.
 ________________________________________
 Expected Outcomes:
 ●	A visual dashboard tracking sales growth, game popularity, and top-performing retailers.
