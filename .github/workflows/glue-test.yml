@@ -1,4 +1,4 @@
-name: Texas Lottery Glue CI/CD
+name: Texas Lottery Glue CI/CD   # Descriptive name for the GitHub Actions workflow
 
 on:
   push:
@@ -9,53 +9,69 @@ on:
 
 jobs:
   glue_pipeline:
-    runs-on: ubuntu-latest
+    # GitHub Actions job runs inside a clean, temporary Ubuntu virtual machine (runner)
+    runs-on: ubuntu-latest       
 
+    # Environment variables accessible by all steps in this job
     env:
-      SCRIPT_PATH: glue-transformation/script.py
+      SCRIPT_PATH: glue-transformation/script.py # Local path to the Glue ETL script to be uploaded to S3
 
     steps:
 
+      # STEP 1: FETCH LATEST CODE
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # STEP 2: CONFIGURE AWS CREDENTIALS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}         # IAM user or role credentials
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # Secret key for authentication
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}         # Temporary session token for security
+          aws-region: us-east-1                                       # AWS region for all CLI commands
 
+      # STEP 3: INSTALL PYTHON
       - name: Set Up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # STEP 4: INSTALL PYTHON DEPENDENCIES
       - name: Install Dependencies
         run: |
           pip install boto3 pylint
 
+      # STEP 5: LINT GLUE SCRIPT
+      #   - Prevents broken code from being deployed to Glue by catching syntax errors early.
       - name: Lint/Test Glue Script
         run: |
           pylint $SCRIPT_PATH || echo "Lint warnings (non-blocking)"
 
+      # STEP 6: UPLOAD GLUE SCRIPT TO S3
       - name: Upload Script to S3
         run: |
           aws s3 cp "$SCRIPT_PATH" "s3://jay-patil-script-bucket/Glue_script/transformation_script/final_script.py"
 
-
+      # STEP 7: INSTALL TERRAFORM CLI
+     
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v2
 
+      # STEP 8: INITIALIZE TERRAFORM
+     
       - name: Terraform Init
         working-directory: Terraform/
         run: terraform init
 
+      # STEP 9: VALIDATE TERRAFORM CONFIGURATION
+      
       - name: Terraform Validate
         working-directory: Terraform/
         run: terraform validate
 
+      # STEP 10: DEPLOY AWS RESOURCES USING TERRAFORM
+     
       - name: Terraform Apply with Variables
         working-directory: Terraform/
         run: |
@@ -68,6 +84,8 @@ jobs:
             -var="raw_glue_database=${{ secrets.RAW_GLUE_DATABASE }}" \
             -var="transformed_glue_database=${{ secrets.TRANSFORMED_GLUE_DATABASE }}"
 
+      # STEP 11: EXECUTE THE GLUE ETL JOB
+     
       - name: Run Glue Job and Crawler
         run: |
           echo "Starting Glue Job..."
@@ -80,6 +98,7 @@ jobs:
           echo "Started job with ID: $JOB_RUN_ID"
           echo "Polling until job completes..."
 
+          # Continuous loop to check Glue Job status
           while true; do
             STATUS=$(aws glue get-job-run \
               --region "us-east-1" \
@@ -101,12 +120,16 @@ jobs:
             sleep 30
           done
 
+          # Extra delay to ensure all S3 writes are finalized before crawling
           echo "Waiting 2 minutes for data to flush to S3..."
           sleep 120
 
+          # Start the Glue Crawler to register the transformed data into AWS Glue Data Catalog
           echo "Starting transformed data crawler..."
           aws glue start-crawler --region "us-east-1" --name "${{ secrets.CRAWLER_NAME }}"
       
+      # STEP 12: WAIT FOR CRAWLER COMPLETION
+    
       - name: Wait for Crawler to Finish Before Destroy
         run: |
           echo "Waiting for crawler to finish..."
@@ -126,7 +149,7 @@ jobs:
             fi
           done
 
-
+      # STEP 13: CLEAN UP INFRASTRUCTURE
       - name: Terraform Destroy (Cleanup)
         if: always()
         working-directory: Terraform/
@@ -140,4 +163,3 @@ jobs:
             -var="glue_script_s3_path=${{ secrets.GLUE_SCRIPT_S3_PATH }}" \
             -var="raw_glue_database=${{ secrets.RAW_GLUE_DATABASE }}" \
             -var="transformed_glue_database=${{ secrets.TRANSFORMED_GLUE_DATABASE }}"
-
