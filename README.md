@@ -3,8 +3,8 @@ Project Synopsis-Group 1
 
 
 
-Texas Lottery Data Analysis and Prediction
-Project Title:Statistical Modeling of Texas Lottery Draw Outcomes.
+
+Project Title:Texas Lottery Data Analysis
 ________________________________________
 Problem Statement:The Texas Lottery Commission seeks to enhance revenue planning by forecasting lottery sales and segmenting retailers based on their sales patterns and game preferences. Leveraging historical sales data can provide insights to optimize inventory distribution and tailor promotional strategies
 ________________________________________
@@ -58,13 +58,6 @@ Methodology:
 
 ○	Conduct market basket analysis to see co-purchase trends (e.g. scratch-off + Powerball).
 
-5.	Modeling:
-○	Forecasting Modeling:
-■	Event based modelling and revenue planning.
-
-○	Predictive Modeling:
-■	Predict high-sales days based on historical data.
-■	Classification for predicting popular game types at a retailer.
 ________________________________________
 Expected Outcomes:
 ●	A visual dashboard tracking sales growth, game popularity, and top-performing retailers.
