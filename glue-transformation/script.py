@@ -30,49 +30,7 @@ spark = glueContext.spark_session  # Get SparkSession from GlueContext
 job = Job(glueContext)  # Initialize Glue Job object
 job.init(args['JOB_NAME'], args)  # Start Glue job with job name argument
 
-# # Step: Read input data from AWS Glue Data Catalog table "lottery_sales" in "test_db"
-# df = glueContext.create_dynamic_frame.from_catalog(
-#     database="test_db",
-#     table_name="lottery_sales",
-#     transformation_ctx="Terraform_ETL_Using_Glue"
-# ).toDF()  # Convert DynamicFrame to Spark DataFrame for transformations
-
-l_df = spark.read.csv("s3://projectdemo1d/raw/",header=True,inferSchema=True)
-
-# ---------------------------
-# Read Population Dataset
-# ---------------------------
-p_df = spark.read.csv("s3://projectdemo1d/population/",header=True,inferSchema=True)
-
-# Ensure correct type for population
-p_df = p_df.withColumn("Population", col("Population").cast("long"))
-
-# ---------------------------
-# Clean join key in both DataFrames
-# ---------------------------
-l_df = l_df.withColumn("Retailer Location Zip Code", col("Retailer Location Zip Code").cast(StringType()))
-l_df = l_df.withColumn(
-    "Retailer Location Zip Code",
-    when(col("Retailer Location Zip Code").isNull() | (col("Retailer Location Zip Code") == ""), lit("UNKNOWN"))
-    .otherwise(col("Retailer Location Zip Code"))
-)
-
-p_df = p_df.withColumn("Retailer Location Zip Code", col("Retailer Location Zip Code").cast(StringType()))
-p_df = p_df.withColumn(
-    "Retailer Location Zip Code",
-    when(col("Retailer Location Zip Code").isNull() | (col("Retailer Location Zip Code") == ""), lit("UNKNOWN"))
-    .otherwise(col("Retailer Location Zip Code"))
-)
-
-# ---------------------------
-# Perform Left Join
-# ---------------------------
-df = l_df.join(
-    broadcast(p_df),
-    on="Retailer Location Zip Code",
-    how="left"
-)
-
+df = spark.read.csv("s3://joinedbucketbasedonzipcode/joineddatazipcode/",header=True,inferSchema=True)
 
 
 #Samir
@@ -103,7 +61,6 @@ df = df.withColumn(
         col("owning_entity_retailer_name")
     )
 )
-
 
 
 # Step : Drop unwanted or redundant columns to clean dataset
@@ -200,7 +157,7 @@ df = df.join(parent_canonical, df["owning_entity_retailer_number"] == col("oern"
        .drop("owning_entity_retailer_name", "oern") \
        .withColumnRenamed("canonical_parent", "owning_entity_retailer_name")
 # Final output S3 path for storing data in Parquet format
-output_path = "s3://lotterypopulationfinal/transformed_data/"
+output_path = "s3://texaslotteryfinaltransformdata-group1/output/"
 
 #Write DataFrame to Parquet partitioned by fiscal_year
 df.write \
