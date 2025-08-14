@@ -9,7 +9,7 @@ from awsglue.utils import getResolvedOptions  # Helper to extract job parameters
 from pyspark.sql.types import StringType  #to explicitly cast to string type
 from pyspark.sql.functions import (
     col,# Reference a column in DataFrame
-    broadcast,
+    regexp_replace,  # Regular expression replacement in strings
     count,  # Aggregate count function
     row_number,  # Ranking function for canonical name logic
     to_date,  # Convert string to date format
@@ -47,6 +47,7 @@ df = df.dropDuplicates()
 df = df.withColumn("gross_ticket_sales_amount", col("gross_ticket_sales_amount").cast("decimal(20,2)")) \
        .withColumn("net_ticket_sales_amount", col("net_ticket_sales_amount").cast("decimal(20,2)")) \
        .withColumn("ticket_price", col("ticket_price").cast("decimal(10,2)")) \
+       .withColumn("population", regexp_replace(col("population"), ",", "").cast("long")) \
        .withColumn("month_ending_date", to_date(col("month_ending_date"), "MM/dd/yyyy"))
 
 
