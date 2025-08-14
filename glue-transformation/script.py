@@ -33,6 +33,35 @@ job.init(args['JOB_NAME'], args)  # Start Glue job with job name argument
 df = spark.read.csv("s3://joinedbucketbasedonzipcode/joineddatazipcode/",header=True,inferSchema=True)
 
 
+
+#Mamta
+# Step : Generate canonical retailer location name by selecting the most frequent retailer_location_name per retailer_license_number
+retailer_name_freq = df.groupBy("retailer_license_number", "retailer_location_name") \
+    .agg(count("*").alias("name_count"))
+retailer_window = Window.partitionBy("retailer_license_number").orderBy(col("name_count").desc())
+retailer_ranked = retailer_name_freq.withColumn("rank", row_number().over(retailer_window))
+retailer_canonical = retailer_ranked.filter(col("rank") == 1) \
+    .selectExpr("retailer_license_number as rl_num", "retailer_location_name as canonical_name")
+
+# Join canonical retailer name back to main DataFrame and replace original retailer_location_name
+df = df.join(retailer_canonical, df["retailer_license_number"] == col("rl_num"), "left") \
+       .drop("retailer_location_name", "rl_num") \
+       .withColumnRenamed("canonical_name", "retailer_location_name")
+
+
+# Step : Generate canonical owning entity retailer name similarly, picking the most frequent name per owning_entity_retailer_number
+parent_name_freq = df.groupBy("owning_entity_retailer_number", "owning_entity_retailer_name") \
+    .agg(count("*").alias("name_count"))
+parent_window = Window.partitionBy("owning_entity_retailer_number").orderBy(col("name_count").desc())
+parent_ranked = parent_name_freq.withColumn("rank", row_number().over(parent_window))
+parent_canonical = parent_ranked.filter(col("rank") == 1) \
+    .selectExpr("owning_entity_retailer_number as oern", "owning_entity_retailer_name as canonical_parent")
+
+# Join canonical owning entity retailer name back and replace original
+df = df.join(parent_canonical, df["owning_entity_retailer_number"] == col("oern"), "left") \
+       .drop("owning_entity_retailer_name", "oern") \
+       .withColumnRenamed("canonical_parent", "owning_entity_retailer_name")
+
 #Samir
 
 # Step : Standardize column names by stripping whitespace, replacing spaces with underscores, and converting to lowercase
@@ -129,34 +158,6 @@ df = df.withColumn(
 )
 
 
-
-#Mamta
-# Step : Generate canonical retailer location name by selecting the most frequent retailer_location_name per retailer_license_number
-retailer_name_freq = df.groupBy("retailer_license_number", "retailer_location_name") \
-    .agg(count("*").alias("name_count"))
-retailer_window = Window.partitionBy("retailer_license_number").orderBy(col("name_count").desc())
-retailer_ranked = retailer_name_freq.withColumn("rank", row_number().over(retailer_window))
-retailer_canonical = retailer_ranked.filter(col("rank") == 1) \
-    .selectExpr("retailer_license_number as rl_num", "retailer_location_name as canonical_name")
-
-# Join canonical retailer name back to main DataFrame and replace original retailer_location_name
-df = df.join(retailer_canonical, df["retailer_license_number"] == col("rl_num"), "left") \
-       .drop("retailer_location_name", "rl_num") \
-       .withColumnRenamed("canonical_name", "retailer_location_name")
-
-
-# Step : Generate canonical owning entity retailer name similarly, picking the most frequent name per owning_entity_retailer_number
-parent_name_freq = df.groupBy("owning_entity_retailer_number", "owning_entity_retailer_name") \
-    .agg(count("*").alias("name_count"))
-parent_window = Window.partitionBy("owning_entity_retailer_number").orderBy(col("name_count").desc())
-parent_ranked = parent_name_freq.withColumn("rank", row_number().over(parent_window))
-parent_canonical = parent_ranked.filter(col("rank") == 1) \
-    .selectExpr("owning_entity_retailer_number as oern", "owning_entity_retailer_name as canonical_parent")
-
-# Join canonical owning entity retailer name back and replace original
-df = df.join(parent_canonical, df["owning_entity_retailer_number"] == col("oern"), "left") \
-       .drop("owning_entity_retailer_name", "oern") \
-       .withColumnRenamed("canonical_parent", "owning_entity_retailer_name")
 # Final output S3 path for storing data in Parquet format
 output_path = "s3://texaslotteryfinaltransformdata-group1/output/"
 
