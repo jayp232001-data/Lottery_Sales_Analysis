@@ -91,3 +91,10 @@ Studying Texas Lottery sales data can show useful trends—like which games sell
 ________________________________________
 References:
 https://catalog.data.gov/dataset/texas-lottery-sales-by-fiscal-month-year-game-and-retailer
+
+
+
+
+
+
+![architecture](architecture.png)
