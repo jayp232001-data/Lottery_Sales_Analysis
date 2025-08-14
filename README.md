@@ -86,6 +86,11 @@ References:
 https://catalog.data.gov/dataset/texas-lottery-sales-by-fiscal-month-year-game-and-retailer
 
 
+**
+ARCHITECTURE DIAGRAM**
+
+
+
 
 
 
