@@ -73,10 +73,6 @@ df = l_df.join(
     how="left"
 )
 
-
-
-#Samir
-
 # Step 2: Standardize column names by stripping whitespace, replacing spaces with underscores, and converting to lowercase
 df = df.toDF(*[c.strip().lower().replace(" ", "_") for c in df.columns])
 
@@ -141,10 +137,6 @@ columns_to_drop = [
 ]
 df = df.drop(*columns_to_drop)
 
-
-
-#Jay
-
 # Step 9: Convert cancelled, promotional, and ticket returns amounts to positive values using absolute function
 df = df.withColumn("cancelled_tickets_amount_positive", abs(col("cancelled_tickets_amount")))
 
@@ -159,9 +151,6 @@ df = df.withColumn(
     when(col("ticket_price") > 0, abs(col("net_ticket_sales_amount")) / col("ticket_price")).otherwise(0)
 )
 
-
-
-#Yash
 # Step 7: Add flag column 'is_negative_sale' to identify rows where net ticket sales amount is negative (e.g., refunds)
 df = df.withColumn("is_negative_sale", when(col("net_ticket_sales_amount") < 0, 1).otherwise(0))
 
@@ -170,7 +159,6 @@ df = df.withColumn("is_negative_sale", when(col("net_ticket_sales_amount") < 0, 
 df = df.withColumn("ticket_price_str", col("ticket_price").cast(StringType()))
 df = df.withColumn("promotional_tickets_amount_positive", abs(col("promotional_tickets_amount")))
 
-#Mamta
 # Step : Generate canonical retailer location name by selecting the most frequent retailer_location_name per retailer_license_number
 retailer_name_freq = df.groupBy("retailer_license_number", "retailer_location_name") \
     .agg(count("*").alias("name_count"))
